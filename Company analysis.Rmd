@@ -1,0 +1,282 @@
+---
+title: "ST2195 Coursework"
+output: html_document
+---
+
+
+```{r load_libraries, echo=TRUE}
+## Install relevant packages
+
+install.packages("tidyverse")
+library(tidyverse)
+library(dplyr) # originally loaded library(dplr) for Qs1, but conflicts occured 
+
+# ascribe needed files to variable data_files
+data_files <- list.files(path = "/Users/Shilpa/Desktop/data", full.names = TRUE)
+
+# Sort in descending order to get the last three files
+data_files <- tail(data_files, 3) 
+
+# Function to read bz2 files
+bz2todataframe <- function(file) {
+  cat(paste0("Reading ", file, "\n"))
+  return(read_csv(file, locale = locale(encoding = "latin1")))
+}
+
+# Concatenate data
+df <- bind_rows(lapply(data_files, bz2todataframe))
+df
+```
+
+```{r}
+## Question 1
+### Part a.
+library(ggplot2)
+
+# Calculate average delay per departure time
+average_delay_per_time <- df %>%
+  group_by(DepTime) %>%
+  summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE)) %>%
+  arrange(AvgDepDelay)
+
+# Plotting the data
+ggplot(filter(average_delay_per_time, DepTime <= 2400), aes(x = DepTime, y = AvgDepDelay)) +
+  geom_line(color = "blue",  aes(group = 1)) +
+  geom_point(color = "blue") +
+  labs(x = "Departure Time (hhmm)", y = "Average Departure Delay (minutes)", title = "Average Departure Delay by Departure Time") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+library(forcats)  # Required for factor handling
+
+# Calculate average delay per day of the week
+average_delay_per_week_day <- df %>%
+  group_by(DayOfWeek) %>%
+  summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE))
+
+# Map day of week numbers to labels
+day_mapping <- c(
+  "Monday", "Tuesday", "Wednesday", "Thursday",
+  "Friday", "Saturday", "Sunday"
+)
+
+average_delay_per_week_day$DayOfWeek <- factor(
+  average_delay_per_week_day$DayOfWeek,
+  levels = 1:7,
+  labels = day_mapping
+)
+
+# Plotting the data
+ggplot(average_delay_per_week_day, aes(x = DayOfWeek, y = AvgDepDelay)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Day of the Week", y = "Average Departure Delay (minutes)", title = "Average Departure Delay per Day of the Week") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()  # To have horizontal bars
+
+```
+
+
+```{r}
+
+## Question 1
+### Part b.
+library(lubridate)  # Required for date manipulation
+#DayofMonth <- c(1:31)
+#included_labels <- c("28/01", "28/02", "28/03","28/04", "28/5", "28/6", "28/7", "28/8", "28/9","28/10", "28/11","28/12")
+
+combined_date_df <- df %>% mutate(Date = dmy(paste(DayofMonth, Month, Year, sep = "/")))
+
+avg_delay_per_day <- combined_date_df %>% 
+  group_by(Year, Month, DayofMonth) %>%
+  summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE))
+
+# Calculate average delay per calendar day and month
+#average_delay_per_calendar_day <- df %>%
+  #group_by(Month, DayofMonth) %>%
+  #summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE))
+  
+
+
+# Map day and month to a custom date format
+average_delay_per_calendar_day <- average_delay_per_calendar_day %>%
+  mutate(Date = paste0(DayofMonth , "/", Month)) %>%
+  select(Date, AvgDepDelay) %>%
+  arrange(Date)
+  
+  
+
+
+# Plotting the data
+ggplot(average_delay_per_calendar_day, aes(x = Date, y = AvgDepDelay)) +
+  geom_line(color = "blue",  aes(group = 1)) +
+  geom_point(color = "blue") +
+  labs(x = "Date", y = "Average Departure Delay", title = "Average Departure Delay per Day") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(breaks = included_labels)  # Prevent auto-ordering of dates
+```
+
+
+```{r}
+## Question 1
+### Part c.
+install.packages("viridis")
+library(viridis)  # Required for color mapping
+
+# Calculate average delay per month
+average_delay_per_month <- df %>%
+  group_by(Month) %>%
+  summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE))
+
+# Define month labels
+month_mapping <- c(
+  "January", "February", "March", "April","May", "June","July", "August","September", "October","November","December"
+)
+
+# Convert Month to an ordered factor with custom levels
+average_delay_per_month$Month <- factor(
+  average_delay_per_month$Month,
+  levels = 1:12,
+  labels = month_mapping,
+  ordered = TRUE
+)
+
+# Plotting the data
+ggplot(average_delay_per_month, aes(x = Month, y = AvgDepDelay, fill = AvgDepDelay)) +
+  geom_bar(stat = "identity") +
+
+  labs(x = "Month", y = "Average Departure Delay", title = "Average Departure Delay per Month") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(fill = FALSE)  # Hide color legend
+```
+
+```{r}
+
+## Question 2
+
+library(readr)
+
+
+# Load the plane data
+plane_data <- read_csv("/Users/Shilpa/Downloads/plane-data.csv")
+
+# Merge data
+merged <- df %>%
+  select(TailNum, DepDelay, Year) %>%
+  inner_join(select(plane_data, tailnum, issue_date), by = c("TailNum" = "tailnum")) %>%
+  filter(!is.na(issue_date)) %>%
+  mutate(issue_year = as.integer(substr(issue_date, nchar(issue_date) - 3, nchar(issue_date))),
+         age = Year - issue_year)
+
+# Calculate average delay per aircraft age
+grouped_age <- merged %>%
+  group_by(age) %>%
+  summarize(AvgDepDelay = mean(DepDelay, na.rm = TRUE))
+
+# Plotting the data
+ggplot(grouped_age, aes(x = age, y = AvgDepDelay)) +
+  geom_bar(stat = "identity", width = 0.8, fill = "blue", alpha = 0.7) +
+  labs(x = "Aircraft Age (years)", y = "Average Departure Delay", title = "Average Departure Delay vs. Aircraft Age") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(expand = c(0, 0))  # Prevent expansion of y-axis
+```
+
+
+```{r}
+## Question 3
+
+library(purrr)
+install.packages("purrr")
+ 
+year_month <- ("Year" sep = "/" "Month")
+# Define function to map year and month to a date format
+map_to_date <- function(year_month) {
+  paste(year_month[1], "/", year_month[2], sep = "")
+}
+
+# Define origins
+origins <- c("ALB", "LAN", "PVD")
+
+# Create a subset of data for specified origins
+subset <- df %>%
+  filter(Origin %in% origins)
+
+# Define a list to store plots
+plots <- list()
+
+# Loop through each origin
+for (origin in origins) {
+  subset_data <- subset %>%
+    filter(Origin == origin)
+  
+  plot_data <- subset_data %>%
+    group_by(Origin, Dest, Year, Month) %>%
+    summarise(Count = n()) %>%
+    arrange(Year, Month) %>%
+    mutate(Date = map_to_date(c(Year, Month)))
+
+  plot <- ggplot(plot_data, aes(x = Date, y = Count, color = paste(Origin, "->", Dest))) +
+    geom_line() +
+    labs(x = "Month", y = "Count Value", title = "Origin-Destination Count Over Months", color = "Flights") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_color_brewer(palette = "Set1")  # Choose a color palette
+
+  plots[[origin]] <- plot
+}
+
+# Display the plots
+plots
+```
+
+
+```{r}
+# Question 4
+
+install.packages("ggpubr")
+library(ggpubr)
+
+# Filter out rows with missing departure or arrival times
+flight_samples <- df %>%
+  filter(!is.na(DepTime) & !is.na(ArrTime))
+
+# Filter for same-day arrivals
+same_day_arrivals <- flight_samples %>%
+  filter(as.integer(DepTime) < as.integer(ArrTime))
+
+# Calculate average arrival delays by destination
+average_arrival_delays <- same_day_arrivals %>%
+  group_by(Year, Month, DayofMonth, Dest) %>%
+  summarise(ArrDelay = mean(ArrDelay, na.rm = TRUE)) %>%
+  rename(Airport = Dest)  # Rename "Dest" column to "Airport"
+
+# Calculate average departure delays by origin
+average_departure_delays <- flight_samples %>%
+  group_by(Year, Month, DayofMonth, Origin) %>%
+  summarise(DepDelay = mean(DepDelay, na.rm = TRUE)) %>%
+  rename(Airport = Origin)  # Rename "Origin" column to "Airport"
+
+# Merge the two datasets using the Year, Month, DayofMonth, and Airport columns
+merged <- inner_join(average_arrival_delays, average_departure_delays, by = c("Year", "Month", "DayofMonth", "Airport"))
+
+# Filter merged data
+merged <- merged %>%
+  filter(DepDelay < 350, ArrDelay < 350, DepDelay > -20, ArrDelay > -20)
+
+# Calculate the correlation coefficient
+r_value <- cor(merged$ArrDelay, merged$DepDelay)
+print(r_value)
+
+# Sample 2000 data points
+datapoints <- merged[1:2000, ]
+
+# Plotting
+ggscatter(datapoints, x = "ArrDelay", y = "DepDelay", add = "reg.line", 
+          title = "Scatter plot of ArrDelay vs. DepDelay with Line of Best Fit",
+          xlab = "ArrDelay (minutes)", ylab = "DepDelay (minutes)", 
+          palette = "jco"
+)
+```
